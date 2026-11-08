@@ -29,8 +29,9 @@ function mulberry32(seed: number) {
   };
 }
 
-const CATEGORIES = ["Makanan", "Minuman", "Snack", "Sembako"];
+const CATEGORIES = ["Lauk Matang", "Ikan Segar", "Ikan Olahan"];
 
+// Katalog demo sengaja kecil: 10 produk lauk & ikan saja.
 const PRODUCTS: Array<{
   name: string;
   sku: string;
@@ -40,24 +41,16 @@ const PRODUCTS: Array<{
   stock: number;
   weight: number;
 }> = [
-  { name: "Nasi Ayam Geprek", sku: "MKN-01", category: "Makanan", price: 15000, cost: 9000, stock: 40, weight: 18 },
-  { name: "Nasi Telur Dadar", sku: "MKN-02", category: "Makanan", price: 12000, cost: 6500, stock: 35, weight: 14 },
-  { name: "Mie Goreng Spesial", sku: "MKN-03", category: "Makanan", price: 13000, cost: 7000, stock: 30, weight: 12 },
-  { name: "Nasi Uduk Komplit", sku: "MKN-04", category: "Makanan", price: 17000, cost: 10000, stock: 24, weight: 10 },
-  { name: "Sate Ayam (10 tusuk)", sku: "MKN-05", category: "Makanan", price: 20000, cost: 12500, stock: 6, weight: 9 },
-  { name: "Tahu Goreng (5 pcs)", sku: "MKN-06", category: "Makanan", price: 6000, cost: 3000, stock: 50, weight: 8 },
-  { name: "Es Teh Manis", sku: "MNM-01", category: "Minuman", price: 5000, cost: 1500, stock: 120, weight: 22 },
-  { name: "Es Jeruk", sku: "MNM-02", category: "Minuman", price: 7000, cost: 2500, stock: 90, weight: 14 },
-  { name: "Kopi Hitam", sku: "MNM-03", category: "Minuman", price: 6000, cost: 2000, stock: 80, weight: 11 },
-  { name: "Air Mineral 600ml", sku: "MNM-04", category: "Minuman", price: 4000, cost: 2200, stock: 100, weight: 16 },
-  { name: "Teh Botol", sku: "MNM-05", category: "Minuman", price: 5000, cost: 3500, stock: 60, weight: 12 },
-  { name: "Keripik Singkong", sku: "SNK-01", category: "Snack", price: 8000, cost: 5000, stock: 45, weight: 9 },
-  { name: "Pisang Goreng (3 pcs)", sku: "SNK-02", category: "Snack", price: 7000, cost: 3500, stock: 36, weight: 8 },
-  { name: "Kacang Goreng", sku: "SNK-03", category: "Snack", price: 6000, cost: 3500, stock: 0, weight: 6 },
-  { name: "Telur Ayam (per kg)", sku: "SMB-01", category: "Sembako", price: 28000, cost: 24500, stock: 20, weight: 5 },
-  { name: "Beras Premium 5kg", sku: "SMB-02", category: "Sembako", price: 68000, cost: 61000, stock: 3, weight: 4 },
-  { name: "Minyak Goreng 1L", sku: "SMB-03", category: "Sembako", price: 18000, cost: 15500, stock: 25, weight: 6 },
-  { name: "Gula Pasir 1kg", sku: "SMB-04", category: "Sembako", price: 16000, cost: 14000, stock: 22, weight: 5 },
+  { name: "Ayam Goreng (potong)", sku: "LKK-01", category: "Lauk Matang", price: 12000, cost: 8500, stock: 24, weight: 20 },
+  { name: "Ikan Kembung Goreng", sku: "LKK-02", category: "Lauk Matang", price: 10000, cost: 7000, stock: 18, weight: 16 },
+  { name: "Ikan Tongkol Balado", sku: "LKK-03", category: "Lauk Matang", price: 13000, cost: 9000, stock: 14, weight: 14 },
+  { name: "Telur Balado", sku: "LKK-04", category: "Lauk Matang", price: 7000, cost: 4000, stock: 25, weight: 12 },
+  { name: "Tempe & Tahu Goreng (5 pcs)", sku: "LKK-05", category: "Lauk Matang", price: 6000, cost: 3000, stock: 30, weight: 10 },
+  { name: "Ikan Nila Segar (per kg)", sku: "IKN-01", category: "Ikan Segar", price: 38000, cost: 30000, stock: 8, weight: 9 },
+  { name: "Ikan Lele Segar (per kg)", sku: "IKN-02", category: "Ikan Segar", price: 26000, cost: 20000, stock: 12, weight: 7 },
+  { name: "Udang Segar (per kg)", sku: "IKN-03", category: "Ikan Segar", price: 85000, cost: 70000, stock: 4, weight: 5 },
+  { name: "Ikan Asin Peda (pack)", sku: "IKO-01", category: "Ikan Olahan", price: 15000, cost: 11000, stock: 20, weight: 6 },
+  { name: "Kerupuk Ikan (pack)", sku: "IKO-02", category: "Ikan Olahan", price: 8000, cost: 5000, stock: 0, weight: 4 },
 ];
 
 const CUSTOMERS = [
@@ -74,16 +67,12 @@ const CUSTOMERS = [
 ];
 
 const EXPENSES: Array<{ title: string; amount: number; category: string }> = [
-  { title: "Belanja sayur & bumbu", amount: 185000, category: "bahan baku" },
+  { title: "Belanja ikan kembung 5 kg", amount: 175000, category: "bahan baku" },
+  { title: "Ikan nila & lele dari pasar", amount: 240000, category: "bahan baku" },
+  { title: "Bumbu, cabai & bawang", amount: 95000, category: "bahan baku" },
   { title: "Gas LPG 3kg (2 tabung)", amount: 44000, category: "operasional" },
-  { title: "Isi ulang air galon", amount: 20000, category: "operasional" },
-  { title: "Beli ayam 5 kg", amount: 190000, category: "bahan baku" },
-  { title: "Plastik kemasan & kresek", amount: 35000, category: "perlengkapan" },
   { title: "Token listrik", amount: 100000, category: "operasional" },
-  { title: "Servis kulkas", amount: 150000, category: "perawatan" },
-  { title: "Beli beras 25 kg", amount: 320000, category: "bahan baku" },
-  { title: "Es batu & sirup", amount: 45000, category: "bahan baku" },
-  { title: "Sewa lapak mingguan", amount: 200000, category: "sewa" },
+  { title: "Plastik & kertas pembungkus", amount: 35000, category: "perlengkapan" },
 ];
 
 const PAYMENTS = ["cash", "cash", "cash", "cash", "qris", "qris", "transfer"];
@@ -102,7 +91,7 @@ export function seedDatabase(conn: DatabaseSync) {
   const insertSettings = conn.prepare(
     "INSERT INTO settings (key, value) VALUES (?, ?)",
   );
-  insertSettings.run("store_name", "Warung Bu Sari");
+  insertSettings.run("store_name", "Warung Lauk Bu Sari");
   insertSettings.run("store_address", "Jl. Melati No. 12, Jakarta Selatan");
   insertSettings.run("store_phone", "0812-3456-7890");
   insertSettings.run("receipt_note", "Terima kasih sudah belanja 🙏");
@@ -173,7 +162,7 @@ export function seedDatabase(conn: DatabaseSync) {
   );
 
   let sequence = 1;
-  const DAYS = 21;
+  const DAYS = 14;
 
   conn.exec("BEGIN");
   try {
@@ -191,7 +180,7 @@ export function seedDatabase(conn: DatabaseSync) {
       const weekend = [0, 6].includes(
         new Date(`${day}T12:00:00+07:00`).getDay(),
       );
-      const baseCount = 12 + Math.floor(rand() * 10) + (weekend ? 5 : 0);
+      const baseCount = 5 + Math.floor(rand() * 5) + (weekend ? 3 : 0);
       const count = isToday
         ? Math.max(2, Math.round(baseCount * Math.min(1, (nowJakartaHour - 6) / 14)))
         : baseCount;
@@ -210,11 +199,11 @@ export function seedDatabase(conn: DatabaseSync) {
       stamps.sort((a, b) => a - b);
 
       for (const stamp of stamps) {
-        const itemCount = 1 + Math.floor(rand() * 3);
+        const itemCount = 1 + Math.floor(rand() * 2);
         const chosen = new Map<number, { product: (typeof pool)[number]; qty: number }>();
         for (let i = 0; i < itemCount; i++) {
           const product = pool[Math.floor(rand() * pool.length)];
-          const qty = 1 + Math.floor(rand() * (product.price > 20000 ? 1 : 3));
+          const qty = 1 + Math.floor(rand() * 2);
           const existing = chosen.get(product.id);
           if (existing) existing.qty += qty;
           else chosen.set(product.id, { product, qty });
