@@ -12,6 +12,7 @@ npm run dev
 ```
 
 Buka http://localhost:3000 — kamu akan diarahkan ke halaman login.
+Saat database masih kosong, data demo dibuat otomatis pada akses pertama.
 
 ## Akun demo
 
@@ -26,12 +27,28 @@ Tombol akun demo di halaman login langsung mengisi kredensialnya.
 
 - File: `data/kasirku.db` (bisa diubah lewat env `DATABASE_PATH`).
 - Driver: `node:sqlite` bawaan Node.js 22 — tanpa dependency native, tanpa server DB.
-- Skema & data demo otomatis dibuat saat file DB belum ada: katalog kecil
-  10 produk lauk & ikan, ±14 hari transaksi, dan 6 catatan pengeluaran —
-  cukup untuk mengisi dashboard tanpa membuat data numpuk.
 - Backup = salin file `data/kasirku.db`.
 
-Mau mulai dari nol? Hapus `data/kasirku.db` lalu jalankan ulang aplikasinya.
+### Kapan database di-seed?
+
+| Situasi | Yang terjadi |
+| --- | --- |
+| Database kosong (file belum ada / tabel `users` masih kosong) | Seed data demo **otomatis** saat pertama diakses — juga untuk setup/deploy pertama |
+| Database sudah berisi data | **Tidak disentuh sama sekali**: build, restart, maupun pull request tidak menimpa datamu |
+| Kamu memang minta reset | Hanya lewat perintah manual di bawah |
+
+Data demo: 10 produk lauk & ikan, ±14 hari transaksi, 6 catatan pengeluaran.
+
+Perintah manual (**keduanya menghapus data lama** — jalankan hanya saat mau reset):
+
+```bash
+npm run db:reset   # hapus file DB + buat ulang data demo dari nol
+npm run db:seed    # kosongkan semua tabel + isi ulang data demo (file DB tetap)
+npm run test:db    # uji: pastikan seed tidak menimpa data valid (pakai DB sementara)
+```
+
+Mau mulai mencatat dari nol tanpa data contoh? Jalankan `npm run db:reset`, lalu
+hapus transaksi/produk contoh lewat aplikasi.
 
 ## Fitur
 
