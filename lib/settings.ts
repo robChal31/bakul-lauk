@@ -10,7 +10,7 @@ export type StoreSettings = {
 };
 
 const DEFAULTS: StoreSettings = {
-  store_name: "Warung Bu Sari",
+  store_name: "Bakul Lauk",
   store_address: "Jl. Melati No. 12, Jakarta Selatan",
   store_phone: "0812-3456-7890",
   receipt_note: "Terima kasih sudah belanja 🙏",
