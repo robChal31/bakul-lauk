@@ -26,8 +26,9 @@ Tombol akun demo di halaman login langsung mengisi kredensialnya.
 
 - File: `data/kasirku.db` (bisa diubah lewat env `DATABASE_PATH`).
 - Driver: `node:sqlite` bawaan Node.js 22 — tanpa dependency native, tanpa server DB.
-- Skema & data demo otomatis dibuat saat file DB belum ada (21 hari transaksi,
-  18 produk, 10 catatan pengeluaran) sehingga dashboard langsung terisi.
+- Skema & data demo otomatis dibuat saat file DB belum ada: katalog kecil
+  10 produk lauk & ikan, ±14 hari transaksi, dan 6 catatan pengeluaran —
+  cukup untuk mengisi dashboard tanpa membuat data numpuk.
 - Backup = salin file `data/kasirku.db`.
 
 Mau mulai dari nol? Hapus `data/kasirku.db` lalu jalankan ulang aplikasinya.
