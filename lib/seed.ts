@@ -76,7 +76,7 @@ export function seedDatabase(conn: DatabaseSync) {
   const insertSettings = conn.prepare(
     "INSERT INTO settings (key, value) VALUES (?, ?)",
   );
-  insertSettings.run("store_name", "Warung Lauk Bu Sari");
+  insertSettings.run("store_name", "Bakul Lauk");
   insertSettings.run("store_address", "Jl. Melati No. 12, Jakarta Selatan");
   insertSettings.run("store_phone", "0812-3456-7890");
   insertSettings.run("receipt_note", "Terima kasih sudah belanja 🙏");
