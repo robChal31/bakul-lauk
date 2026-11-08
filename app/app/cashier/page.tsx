@@ -7,7 +7,7 @@ export const instant = false;
 
 export default async function CashierPage() {
   const user = await requireUser();
-  const products = listProducts()
+  const products = (await listProducts())
     .filter((product) => product.is_active === 1)
     .map((product) => ({
       id: product.id,
@@ -17,11 +17,11 @@ export default async function CashierPage() {
       category_name: product.category_name,
     }));
 
-  const categories = listCategories()
+  const categories = (await listCategories())
     .filter((category) => category.total > 0)
     .map((category) => category.name);
 
-  const settings = getSettings();
+  const settings = await getSettings();
 
   return (
     <Cashier

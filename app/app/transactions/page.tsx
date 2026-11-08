@@ -43,7 +43,7 @@ export default async function TransactionsPage({
     to = today;
   }
 
-  const sales = listSales({ day, from, to, q });
+  const sales = await listSales({ day, from, to, q });
   const totalOmzet = sales
     .filter((sale) => sale.voided === 0)
     .reduce((sum, sale) => sum + sale.total, 0);

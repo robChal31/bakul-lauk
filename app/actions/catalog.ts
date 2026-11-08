@@ -35,9 +35,9 @@ export async function saveProduct(
   if (stock < 0) return { ok: false, error: "Stok tidak boleh negatif." };
 
   if (id > 0) {
-    db.run(
-      `UPDATE products SET name = ?, sku = ?, category_id = ?, price = ?, cost = ?,
-         stock = ?, is_active = ? WHERE id = ?`,
+    await db.run(
+      `UPDATE products SET name = $1, sku = $2, category_id = $3, price = $4, cost = $5,
+         stock = $6, is_active = $7 WHERE id = $8`,
       name,
       sku,
       categoryId,
@@ -48,9 +48,9 @@ export async function saveProduct(
       id,
     );
   } else {
-    db.run(
+    await db.run(
       `INSERT INTO products (name, sku, category_id, price, cost, stock, is_active, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
       name,
       sku,
       categoryId,
@@ -72,7 +72,7 @@ export async function toggleProductActive(id: number, active: boolean) {
   if (user.role !== "owner") {
     return { ok: false as const, error: "Hanya pemilik yang bisa mengubah produk." };
   }
-  db.run("UPDATE products SET is_active = ? WHERE id = ?", active ? 1 : 0, Number(id));
+  await db.run("UPDATE products SET is_active = $1 WHERE id = $2", active ? 1 : 0, Number(id));
   revalidatePath("/app/products");
   revalidatePath("/app");
   return { ok: true as const };
@@ -83,12 +83,12 @@ export async function deleteProduct(id: number) {
   if (user.role !== "owner") {
     return { ok: false as const, error: "Hanya pemilik yang bisa menghapus produk." };
   }
-  const used = db.get<{ total: number }>(
-    "SELECT COUNT(*) AS total FROM sale_items WHERE product_id = ?",
+  const used = await db.get<{ total: number }>(
+    "SELECT COUNT(*)::int AS total FROM sale_items WHERE product_id = $1",
     Number(id),
   );
   if ((used?.total ?? 0) > 0) {
-    db.run("UPDATE products SET is_active = 0 WHERE id = ?", Number(id));
+    await db.run("UPDATE products SET is_active = 0 WHERE id = $1", Number(id));
     revalidatePath("/app/products");
     return {
       ok: true as const,
@@ -96,7 +96,7 @@ export async function deleteProduct(id: number) {
       message: "Produk sudah dipakai di transaksi, jadi dinonaktifkan.",
     };
   }
-  db.run("DELETE FROM products WHERE id = ?", Number(id));
+  await db.run("DELETE FROM products WHERE id = $1", Number(id));
   revalidatePath("/app/products");
   revalidatePath("/app");
   return { ok: true as const };
@@ -112,12 +112,12 @@ export async function saveCategory(
   }
   const name = String(formData.get("name") ?? "").trim();
   if (!name) return { ok: false, error: "Nama kategori wajib diisi." };
-  const exists = db.get<{ id: number }>(
-    "SELECT id FROM categories WHERE lower(name) = lower(?)",
+  const exists = await db.get<{ id: number }>(
+    "SELECT id FROM categories WHERE lower(name) = lower($1)",
     name,
   );
   if (exists) return { ok: false, error: "Kategori sudah ada." };
-  db.run("INSERT INTO categories (name) VALUES (?)", name);
+  await db.run("INSERT INTO categories (name) VALUES ($1)", name);
   revalidatePath("/app/products");
   return { ok: true };
 }
@@ -127,11 +127,7 @@ export async function adjustStock(id: number, delta: number) {
   const productId = Number(id);
   const change = Math.trunc(Number(delta));
   if (!productId || !change) return { ok: false as const, error: "Perubahan stok tidak valid." };
-  db.run(
-    "UPDATE products SET stock = MAX(0, stock + ?) WHERE id = ?",
-    change,
-    productId,
-  );
+  await db.run("SELECT adjust_stock($1, $2)", productId, change);
   revalidatePath("/app/products");
   revalidatePath("/app");
   return { ok: true as const };

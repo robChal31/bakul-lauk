@@ -9,7 +9,7 @@ export const instant = false;
 export default async function LoginPage() {
   // Kalau lingkungan belum siap (Node terlalu lama / DB read-only), tampilkan
   // instruksi perbaikan alih-alih halaman error bawaan.
-  const problem = databaseProblem();
+  const problem = await databaseProblem();
   if (problem) return <RuntimeErrorNotice problem={problem} />;
 
   try {
@@ -25,7 +25,7 @@ export default async function LoginPage() {
     <main className="flex min-h-dvh flex-col items-center justify-center px-5 py-10">
       <LoginForm />
       <p className="mt-8 text-center text-[11.5px] text-zinc-400">
-        Data disimpan di SQLite. Butuh Node.js 22.13+ dan folder yang writable.
+        Data disimpan di Postgres (Supabase). Butuh env DATABASE_URL.
       </p>
     </main>
   );

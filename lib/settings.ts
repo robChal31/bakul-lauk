@@ -1,4 +1,7 @@
-import "server-only";
+if (process.env.KASIRKU_CLI !== "1") {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  require("server-only");
+}
 import { db } from "./db";
 
 export type StoreSettings = {
@@ -17,8 +20,10 @@ const DEFAULTS: StoreSettings = {
   low_stock_threshold: "10",
 };
 
-export function getSettings(): StoreSettings {
-  const rows = db.all<{ key: string; value: string }>("SELECT key, value FROM settings");
+export async function getSettings(): Promise<StoreSettings> {
+  const rows = await db.all<{ key: string; value: string }>(
+    "SELECT key, value FROM settings",
+  );
   const map = new Map(rows.map((row) => [row.key, row.value]));
   return {
     store_name: map.get("store_name") ?? DEFAULTS.store_name,

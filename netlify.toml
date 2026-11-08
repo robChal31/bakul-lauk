@@ -5,22 +5,13 @@
 [build.environment]
   NODE_VERSION = "22"
 
-# Netlify menjalankan fungsi di filesystem read-only; aplikasi otomatis
-# memindahkan file SQLite ke /tmp (lihat lib/db-path.ts).
-# Kalau punya path persistent, set env DATABASE_PATH ke lokasi tersebut.
+# Database memakai Postgres/Supabase. Set env DATABASE_URL di
+# Site configuration → Environment variables (connection string pooler,
+# port 6543). Build tidak membutuhkan akses database.
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
-[functions]
-  # node:sqlite baru tersedia tanpa flag sejak Node 22.13.
-  node_bundler = "esbuild"
-
 [dev]
   command = "npm run dev"
   targetPort = 3000
-
-[[headers]]
-  for = "/_next/static/*"
-  [headers.values]
-    cache-control = "public, max-age=31536000, immutable"

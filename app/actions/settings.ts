@@ -24,12 +24,14 @@ export async function saveSettings(
     "low_stock_threshold",
   ];
 
+  const current = await getSettings();
+
   for (const field of fields) {
     const value = String(formData.get(field) ?? "").trim();
-    const fallback = getSettings()[field as keyof ReturnType<typeof getSettings>];
-    db.run(
-      `INSERT INTO settings (key, value) VALUES (?, ?)
-       ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    const fallback = current[field as keyof typeof current];
+    await db.run(
+      `INSERT INTO settings (key, value) VALUES ($1, $2)
+       ON CONFLICT (key) DO UPDATE SET value = excluded.value`,
       field,
       value || fallback,
     );

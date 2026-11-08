@@ -1,60 +1,30 @@
-import "server-only";
-import type { DatabaseSync } from "node:sqlite";
-import { openDatabase, probeDatabase } from "./database-core";
-import { DATABASE_PATH } from "./db-path";
-import { plain } from "./rows";
+if (process.env.KASIRKU_CLI !== "1") {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  require("server-only");
+}
+import { getSql } from "./sql";
 
-export { DATABASE_PATH, probeDatabase };
-
-
-declare global {
-  var __kasirkuDb: DatabaseSync | undefined;
+async function query<T>(text: string, params: unknown[]): Promise<T[]> {
+  // `unsafe` = SQL teks biasa dengan parameter ter-bind ($1, $2, ...).
+  const rows = await getSql().unsafe(text, params as never[]);
+  return rows as unknown as T[];
 }
 
-export function getDb(): DatabaseSync {
-  if (!globalThis.__kasirkuDb) {
-    globalThis.__kasirkuDb = openDatabase();
-  }
-  return globalThis.__kasirkuDb;
-}
-
-/** Tutup koneksi (dipakai script CLI sebelum file DB dihapus). */
-export function closeDb() {
-  if (globalThis.__kasirkuDb) {
-    globalThis.__kasirkuDb.close();
-    globalThis.__kasirkuDb = undefined;
-  }
-}
-
-/** Helper kecil supaya pemanggilan query lebih ringkas. */
+/**
+ * Helper query Postgres. Pemakaian: `await db.all<T>(sql, ...params)`.
+ * Semua parameter di-bind oleh driver, jadi aman dari SQL injection.
+ */
 export const db = {
-  all<T>(sql: string, ...params: unknown[]): T[] {
-    const rows = getDb()
-      .prepare(sql)
-      .all(...(params as never[]));
-    return rows.map((row) => plain<T>(row));
+  async all<T>(sql: string, ...params: unknown[]): Promise<T[]> {
+    return query<T>(sql, params);
   },
-  get<T>(sql: string, ...params: unknown[]): T | undefined {
-    const row = getDb()
-      .prepare(sql)
-      .get(...(params as never[]));
-    return row ? plain<T>(row) : undefined;
+  async get<T>(sql: string, ...params: unknown[]): Promise<T | undefined> {
+    const rows = await query<T>(sql, params);
+    return rows[0] ?? undefined;
   },
-  run(sql: string, ...params: unknown[]) {
-    return getDb()
-      .prepare(sql)
-      .run(...(params as never[]));
-  },
-  tx<T>(fn: () => T): T {
-    const conn = getDb();
-    conn.exec("BEGIN");
-    try {
-      const result = fn();
-      conn.exec("COMMIT");
-      return result;
-    } catch (error) {
-      conn.exec("ROLLBACK");
-      throw error;
-    }
+  async run(sql: string, ...params: unknown[]): Promise<void> {
+    await query(sql, params);
   },
 };
+
+export { closeSql, hasDatabaseUrl } from "./sql";

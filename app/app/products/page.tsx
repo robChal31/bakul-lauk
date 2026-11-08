@@ -7,8 +7,8 @@ export const instant = false;
 
 export default async function ProductsPage() {
   const user = await requireUser();
-  const products = listProducts();
-  const categories = listCategories().map((category) => ({
+  const products = await listProducts();
+  const categories = (await listCategories()).map((category) => ({
     id: category.id,
     name: category.name,
   }));

@@ -13,7 +13,7 @@ export default async function ExpensesPage() {
   const fromTs = dayStart(from);
   const toTs = dayEnd(today);
 
-  const raw = listExpenses(fromTs, toTs);
+  const raw = await listExpenses(fromTs, toTs);
   const expenses = raw.map((expense) => ({
     ...expense,
     day: jakartaDay(expense.spent_at),
@@ -22,7 +22,7 @@ export default async function ExpensesPage() {
     total: raw.reduce((sum, expense) => sum + expense.amount, 0),
     count: raw.length,
   };
-  const categories = expenseByCategory(fromTs, toTs).map((row) => ({
+  const categories = (await expenseByCategory(fromTs, toTs)).map((row) => ({
     name: row.category,
     total: row.total,
   }));

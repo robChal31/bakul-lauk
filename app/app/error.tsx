@@ -18,8 +18,8 @@ export default function AppError({
         Ada yang tidak berjalan
       </h1>
       <p className="mt-1 max-w-[32ch] text-[13px] leading-relaxed text-zinc-500">
-        Halaman ini gagal dimuat. Coba muat ulang, data transaksi tetap aman di
-        SQLite.
+        Halaman ini gagal dimuat. Coba muat ulang — data transaksi tetap aman di
+        database.
       </p>
       {error.digest ? (
         <p className="mt-2 font-mono text-[11px] text-zinc-400">
