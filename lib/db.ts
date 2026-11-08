@@ -1,10 +1,10 @@
 import "server-only";
 import type { DatabaseSync } from "node:sqlite";
-import { openDatabase } from "./database-core";
+import { openDatabase, probeDatabase } from "./database-core";
 import { DATABASE_PATH } from "./db-path";
 import { plain } from "./rows";
 
-export { DATABASE_PATH };
+export { DATABASE_PATH, probeDatabase };
 
 
 declare global {
