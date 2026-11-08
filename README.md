@@ -2,12 +2,13 @@
 
 Aplikasi kasir (POS) sederhana untuk warung/toko kecil. Fokusnya **pencatatan**:
 transaksi harian, stok, pengeluaran, dan laporan. Mobile-first, tema netral
-(bukan bertema kuliner), dan seluruh data disimpan di **SQLite di dalam project**.
+(bukan bertema kuliner), dan data disimpan di **Postgres/Supabase**.
 
 ## Menjalankan
 
 ```bash
 npm install       # sekali saja (atau: pnpm install)
+cp .env.example .env.local   # lalu isi DATABASE_URL (lihat bagian Database)
 npm run dev
 ```
 
@@ -23,77 +24,81 @@ Saat database masih kosong, data demo dibuat otomatis pada akses pertama.
 
 Tombol akun demo di halaman login langsung mengisi kredensialnya.
 
-## Database (SQLite lokal)
+## Database (Postgres / Supabase)
 
-- File: `data/kasirku.db` (bisa diubah lewat env `DATABASE_PATH`).
-- Driver: `node:sqlite` bawaan Node.js **≥ 22.13** (sejak versi itu tidak butuh flag
-  `--experimental-sqlite`) — tanpa dependency native, tanpa server DB.
-- Backup = salin file `data/kasirku.db`.
-- Urutan pemilihan lokasi: env `DATABASE_PATH` → `data/kasirku.db` (kalau folder bisa
-  ditulis) → `$TMPDIR/kasirku/kasirku.db` (kalau filesystem read-only, mis. di serverless).
-- Diagnostik: buka **`/api/health`** untuk melihat Node, path DB yang benar-benar
-  dipakai, status penyimpanan (sementara/permanen), dan jumlah baris.
+Aplikasi memakai **Postgres (Supabase)** sebagai satu-satunya database — tidak ada
+SQLite dan tidak ada file database di dalam project. Semua query lewat satu
+connection string:
+
+```bash
+# .env.local (lokal) atau env Netlify (deploy)
+DATABASE_URL="postgresql://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:6543/postgres?sslmode=require"
+```
+
+- Driver: [`postgres`](https://github.com/porsager/postgres) — murni JS, cocok untuk
+  serverless (satu pool per instance, `prepare` dimatikan otomatis untuk pooler).
+- Skema + fungsi RPC ada di **`supabase/schema.sql`** (idempoten).
+- Diagnostik: **`/api/health`** → status koneksi, host database (password disamarkan),
+  jumlah produk & transaksi.
 
 ### Kapan database di-seed?
 
 | Situasi | Yang terjadi |
 | --- | --- |
-| Database kosong (file belum ada / tabel `users` masih kosong) | Seed data demo **otomatis** saat pertama diakses — juga untuk setup/deploy pertama |
+| Tabel `users` masih kosong | Seed data demo **otomatis** saat pertama diakses (juga saat deploy pertama) |
 | Database sudah berisi data | **Tidak disentuh sama sekali**: build, restart, maupun pull request tidak menimpa datamu |
 | Kamu memang minta reset | Hanya lewat perintah manual di bawah |
 
 Data demo: 10 produk lauk & ikan, ±14 hari transaksi, 6 catatan pengeluaran.
 
-Perintah manual (**keduanya menghapus data lama** — jalankan hanya saat mau reset):
+Perintah manual (**menghapus data lama** — hanya untuk reset):
 
 ```bash
-npm run db:reset   # hapus file DB + buat ulang data demo dari nol
-npm run db:seed    # kosongkan semua tabel + isi ulang data demo (file DB tetap)
-npm run test:db    # uji: pastikan seed tidak menimpa data valid (pakai DB sementara)
+npm run db:setup    # terapkan supabase/schema.sql (tanpa menyentuh data)
+npm run db:setup:seed  # schema + seed, hanya kalau tabel users kosong
+npm run db:seed     # kosongkan semua tabel lalu isi ulang data demo
+npm run db:reset    # sama seperti db:seed (alias reset penuh)
+npm run db:check    # cek koneksi & skema
+npm run test:db     # uji logika (+ end-to-end bila DATABASE_URL di-set)
 ```
 
-Mau mulai mencatat dari nol tanpa data contoh? Jalankan `npm run db:reset`, lalu
-hapus transaksi/produk contoh lewat aplikasi.
+> `test:db` dengan `DATABASE_URL` **menghapus tabel** di database yang ditunjuk.
+> Pakai database uji terpisah, jangan database produksi.
+
+### Setup Supabase dari nol
+
+1. Buat project di [supabase.com](https://supabase.com) (region terdekat, mis. Singapore).
+2. **SQL Editor → New query** → tempel isi `supabase/schema.sql` → **Run**.
+   (Atau lokal: `DATABASE_URL=... npm run db:setup`.)
+3. **Project Settings → Database → Connection string → Connection pooling**
+   (port `6543`). Ganti password `[YOUR-PASSWORD]` dengan password database.
+4. Simpan sebagai `DATABASE_URL` di `.env.local` (lokal) dan di Netlify.
+5. Buka aplikasinya — data demo otomatis dibuat saat tabel masih kosong.
+
+Catatan keamanan: semua tabel memakai **RLS tanpa policy** sehingga `anon key`
+tidak bisa membaca/menulis. Aplikasi memakai connection string server-side
+(bukan anon key), jadi jangan pernah menaruh `DATABASE_URL` di kode client.
 
 ## Deploy ke Netlify
 
-Repo ini sudah menyertakan `netlify.toml` (build `npm run build`, plugin
-`@netlify/plugin-nextjs`, `NODE_VERSION=22`). Setelah situs terhubung ke repo,
-Netlify otomatis memakai konfigurasi itu — **tidak perlu `npm install` manual**.
+`netlify.toml` sudah disiapkan (build `npm run build`, publish `.next`, plugin
+`@netlify/plugin-nextjs`, `NODE_VERSION=22`). Yang perlu dilakukan:
 
-### Hal penting: filesystem Netlify read-only
+1. Hubungkan repo ke Netlify.
+2. **Site configuration → Environment variables** → tambah `DATABASE_URL`
+   (connection string pooler dari langkah setup di atas).
+3. Deploy. Build tidak butuh akses database — halaman baru menyentuh DB saat
+   request pertama.
 
-Netlify Functions tidak punya filesystem yang bisa ditulis (selain `/tmp`, yang
-sementara per instance). Karena itu aplikasi **tidak lagi** memaksa membuat
-folder `data/` saat berjalan di serverless:
-
-| Lingkungan | Lokasi DB | Data bertahan? |
-| --- | --- | --- |
-| Lokal / VPS (folder writable) | `data/kasirku.db` | Ya |
-| Netlify tanpa `DATABASE_PATH` | `$TMPDIR/kasirku/kasirku.db` (biasanya `/tmp/...`) | Tidak — kembali ke data demo saat instance dingin/restart |
-| Serverless + `DATABASE_PATH` ke volume persistent | sesuai env | Ya |
-
-Artinya, aplikasi **jalan** di Netlify (halaman tidak 500 lagi), tapi karena
-`/tmp` bersifat sementara, data yang dicatat dari HP bisa hilang ketika function
-di-restart. Untuk pencatatan yang benar-benar permanen, arahkan `DATABASE_PATH`
-ke penyimpanan persistent:
-
-1. **Cara termudah (tanpa ubah kode):** pasang volume persistent (mis. Netlify
-   Blobs tidak bisa dipakai langsung oleh `node:sqlite`) — praktisnya pakai VPS
-   kecil/Fly.io/Railway dengan disk, lalu set `DATABASE_PATH=/data/kasirku.db`.
-2. **Kalau harus tetap di Netlify:** perlu driver eksternal (Turso/libSQL atau
-   Postgres) — ini berarti menambah dependency/akun layanan di luar SQLite lokal.
-
-### Checklist kalau deploy masih error
+Checklist kalau masih error:
 
 1. Buka `https://<situs>.netlify.app/api/health` — JSON-nya menyebut penyebabnya.
-2. `"node": "22.x"` di build environment; kalau lebih lama dari 22.13, set env
-   `NODE_VERSION=22` lalu deploy ulang (clear cache).
-3. Kalau ada pesan `unable to open database file`, set `DATABASE_PATH` ke folder
-   yang bisa ditulis (mis. `/tmp/kasirku/kasirku.db`).
-4. Halaman error kini menjelaskan masalahnya + tombol "Coba lagi", bukan layar
+2. `DATABASE_URL belum dikonfigurasi` → env belum di-set / belum redeploy.
+3. `password authentication failed` → password pada connection string salah.
+4. `Tidak bisa menghubungi database` → pakai host **pooler** (port `6543`);
+   project Supabase baru juga bisa ter-pause, buka dashboard untuk mengaktifkan.
+5. Halaman error kini menjelaskan masalahnya + tombol "Coba lagi", bukan layar
    kosong "This page couldn't load".
-
 
 ## Fitur
 
@@ -113,10 +118,14 @@ ke penyimpanan persistent:
 ## Catatan teknis
 
 - Next.js 16 (App Router, Cache Components, Server Actions), React 19, Tailwind CSS 4.
-- Semua akses data di server (`lib/db.ts`, `lib/queries.ts`); client hanya untuk UI.
+- Semua akses data di server (`lib/db.ts`, `lib/queries.ts`, server actions); client hanya untuk UI.
 - Zona waktu transaksi: `Asia/Jakarta`.
-- Lokasi database ditentukan `lib/db-path.ts`; pemeriksaan prasyarat runtime
-  (Node ≥ 22.13, filesystem writable) ada di `lib/runtime-check.ts` dan
-  ditampilkan lewat `components/RuntimeErrorNotice.tsx` + `app/global-error.tsx`.
+- Koneksi database ada di `lib/sql.ts`, helper query di `lib/db.ts`, bootstrap
+  skema + seed di `lib/bootstrap.ts`. Pemeriksaan konfigurasi ada di
+  `lib/runtime-check.ts` dan ditampilkan lewat `components/RuntimeErrorNotice.tsx`
+  + `app/global-error.tsx`.
+- Penulisan transaksi (checkout, void, hapus, adjust stok) dijalankan sebagai
+  fungsi Postgres (`create_sale`, `void_sale`, `delete_sale`, `adjust_stock`) agar
+  atomik dan aman dari race condition antar kasir.
 - `/api/health` selalu dieksekusi saat request (bukan di-prerender), jadi angkanya
   mencerminkan runtime.

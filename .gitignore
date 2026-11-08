@@ -48,3 +48,6 @@ next-env.d.ts
 
 # netlify
 .netlify/
+
+# contoh env tetap di-commit, isi aslinya tidak
+!.env.example

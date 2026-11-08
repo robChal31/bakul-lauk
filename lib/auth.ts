@@ -1,7 +1,11 @@
-import "server-only";
+if (process.env.KASIRKU_CLI !== "1") {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  require("server-only");
+}
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { connection } from "next/server";
+import { ensureSchema } from "./bootstrap";
 import { redirect } from "next/navigation";
 import { cache } from "react";
 import { db } from "./db";
@@ -29,6 +33,11 @@ function compare(a: string, b: string): boolean {
   return timingSafeEqual(bufA, bufB);
 }
 
+async function isHttpsRequest(): Promise<boolean> {
+  const proto = (await headers()).get("x-forwarded-proto");
+  return proto === "https";
+}
+
 export async function createSession(userId: number) {
   const payload = Buffer.from(
     JSON.stringify({ userId, exp: Date.now() + MAX_AGE * 1000 }),
@@ -40,7 +49,9 @@ export async function createSession(userId: number) {
     sameSite: "lax",
     path: "/",
     maxAge: MAX_AGE,
-    secure: process.env.NODE_ENV === "production",
+    // `secure` hanya bila request memang HTTPS — kalau tidak, cookie ditolak
+    // browser saat diakses lewat http (mis. uji lokal dengan `next start`).
+    secure: await isHttpsRequest(),
   });
 }
 
@@ -50,9 +61,10 @@ export async function destroySession() {
 }
 
 export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
-  // Pastikan pembacaan sesi (dan query SQLite) selalu terjadi saat request,
+  // Pastikan pembacaan sesi (dan query database) selalu terjadi saat request,
   // bukan saat prerender.
   await connection();
+  await ensureSchema();
   const token = (await cookies()).get(COOKIE_NAME)?.value;
   if (!token) return null;
 
@@ -66,8 +78,8 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
     ) as { userId?: number; exp?: number };
     if (!data.userId || !data.exp || data.exp < Date.now()) return null;
 
-    const user = db.get<SessionUser>(
-      "SELECT id, name, username, role FROM users WHERE id = ?",
+    const user = await db.get<SessionUser>(
+      "SELECT id, name, username, role FROM users WHERE id = $1",
       data.userId,
     );
     return user ?? null;

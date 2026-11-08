@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { jakartaDay } from "@/lib/format";
 
 export type CartLine = { productId: number; qty: number };
 
@@ -41,86 +40,28 @@ export async function createSale(input: CheckoutInput): Promise<CheckoutResult> 
     : "cash";
 
   try {
-    const result = db.tx(() => {
-      const rows = cleaned.map((line) => {
-        const product = db.get<{
-          id: number;
-          name: string;
-          price: number;
-          cost: number;
-          stock: number;
-          is_active: number;
-        }>("SELECT id, name, price, cost, stock, is_active FROM products WHERE id = ?", line.productId);
-        if (!product || product.is_active !== 1) {
-          throw new Error("Ada produk yang sudah tidak tersedia.");
-        }
-        if (product.stock < line.qty) {
-          throw new Error(
-            product.stock <= 0
-              ? `Stok ${product.name} habis.`
-              : `Stok ${product.name} tersisa ${product.stock}.`,
-          );
-        }
-        return { ...product, qty: line.qty };
-      });
+    // Seluruh validasi stok + insert + pengurangan stok dikerjakan di dalam
+    // satu fungsi Postgres (supabase/schema.sql → create_sale), jadi atomik
+    // walau koneksi lewat jaringan ke Supabase.
+    const rows = await db.all<{ sale_id: number; code: string }>(
+      `SELECT sale_id, code FROM create_sale($1, $2, $3, $4, $5, $6, $7, $8::text::jsonb)`,
+      user.id,
+      user.name,
+      input.customerName?.trim() || null,
+      Math.max(0, Math.round(Number(input.discount) || 0)),
+      paymentMethod,
+      Math.max(0, Math.round(Number(input.amountPaid) || 0)),
+      input.note?.trim() || null,
+      JSON.stringify(cleaned),
+    );
 
-      const subtotal = rows.reduce((sum, row) => sum + row.price * row.qty, 0);
-      const discount = Math.min(
-        Math.max(0, Math.round(Number(input.discount) || 0)),
-        subtotal,
-      );
-      const total = subtotal - discount;
-      const amountPaid =
-        paymentMethod === "cash"
-          ? Math.max(total, Math.round(Number(input.amountPaid) || 0))
-          : total;
-      const now = Date.now();
-
-      const day = jakartaDay(now).replaceAll("-", "").slice(2);
-      const counter = db.get<{ total: number }>(
-        "SELECT COUNT(*) AS total FROM sales",
-      );
-      const code = `TRX-${day}-${String((counter?.total ?? 0) + 1).padStart(4, "0")}`;
-
-      const insert = db.run(
-        `INSERT INTO sales (code, user_id, cashier_name, customer_name, subtotal, discount,
-           total, payment_method, amount_paid, change_due, note, voided, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)`,
-        code,
-        user.id,
-        user.name,
-        input.customerName?.trim() || null,
-        subtotal,
-        discount,
-        total,
-        paymentMethod,
-        amountPaid,
-        amountPaid - total,
-        input.note?.trim() || null,
-        now,
-      );
-      const saleId = Number(insert.lastInsertRowid);
-
-      for (const row of rows) {
-        db.run(
-          `INSERT INTO sale_items (sale_id, product_id, product_name, price, cost, qty, line_total)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          saleId,
-          row.id,
-          row.name,
-          row.price,
-          row.cost,
-          row.qty,
-          row.price * row.qty,
-        );
-        db.run("UPDATE products SET stock = stock - ? WHERE id = ?", row.qty, row.id);
-      }
-
-      return { saleId, code };
-    });
+    const sale = rows[0];
+    if (!sale) {
+      return { ok: false, error: "Gagal menyimpan transaksi." };
+    }
 
     revalidatePath("/app", "layout");
-    return { ok: true, ...result };
+    return { ok: true, saleId: Number(sale.sale_id), code: sale.code };
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Gagal menyimpan transaksi.";
@@ -136,26 +77,14 @@ export async function voidSale(id: number) {
   const saleId = Number(id);
   if (!saleId) return { ok: false as const, error: "Transaksi tidak ditemukan." };
 
-  db.tx(() => {
-    const sale = db.get<{ voided: number }>("SELECT voided FROM sales WHERE id = ?", saleId);
-    if (!sale) throw new Error("Transaksi tidak ditemukan.");
-    if (sale.voided === 1) throw new Error("Transaksi ini sudah dibatalkan.");
-
-    const items = db.all<{ product_id: number | null; qty: number }>(
-      "SELECT product_id, qty FROM sale_items WHERE sale_id = ?",
-      saleId,
-    );
-    for (const item of items) {
-      if (item.product_id) {
-        db.run(
-          "UPDATE products SET stock = stock + ? WHERE id = ?",
-          item.qty,
-          item.product_id,
-        );
-      }
-    }
-    db.run("UPDATE sales SET voided = 1 WHERE id = ?", saleId);
-  });
+  try {
+    await db.run("SELECT void_sale($1)", saleId);
+  } catch (error) {
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : "Gagal membatalkan transaksi.",
+    };
+  }
 
   revalidatePath("/app", "layout");
   return { ok: true as const };
@@ -169,27 +98,14 @@ export async function deleteSale(id: number) {
   const saleId = Number(id);
   if (!saleId) return { ok: false as const, error: "Transaksi tidak ditemukan." };
 
-  db.tx(() => {
-    const sale = db.get<{ voided: number }>("SELECT voided FROM sales WHERE id = ?", saleId);
-    if (!sale) throw new Error("Transaksi tidak ditemukan.");
-    if (sale.voided === 0) {
-      const items = db.all<{ product_id: number | null; qty: number }>(
-        "SELECT product_id, qty FROM sale_items WHERE sale_id = ?",
-        saleId,
-      );
-      for (const item of items) {
-        if (item.product_id) {
-          db.run(
-            "UPDATE products SET stock = stock + ? WHERE id = ?",
-            item.qty,
-            item.product_id,
-          );
-        }
-      }
-    }
-    db.run("DELETE FROM sale_items WHERE sale_id = ?", saleId);
-    db.run("DELETE FROM sales WHERE id = ?", saleId);
-  });
+  try {
+    await db.run("SELECT delete_sale($1)", saleId);
+  } catch (error) {
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : "Gagal menghapus transaksi.",
+    };
+  }
 
   revalidatePath("/app", "layout");
   return { ok: true as const };

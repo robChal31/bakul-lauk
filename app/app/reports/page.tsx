@@ -42,11 +42,11 @@ export default async function ReportsPage({
   const from = dayStart(fromDay);
   const to = dayEnd(today);
 
-  const totals = reportTotals(from, to);
-  const todaySummary = dailySummary(today);
-  const breakdown = paymentBreakdown(from, to);
-  const best = topProducts(from, to, 5);
-  const series = salesSeries(Math.max(range.days, 7), today);
+  const totals = await reportTotals(from, to);
+  const todaySummary = await dailySummary(today);
+  const breakdown = await paymentBreakdown(from, to);
+  const best = await topProducts(from, to, 5);
+  const series = await salesSeries(Math.max(range.days, 7), today);
   const labaBersih = totals.labaKotor - totals.pengeluaran;
   const margin =
     totals.omzet > 0 ? Math.round((totals.labaKotor / totals.omzet) * 100) : 0;

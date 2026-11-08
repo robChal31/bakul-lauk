@@ -18,8 +18,8 @@ export async function loginAction(
     return { error: "Username dan password wajib diisi." };
   }
 
-  const user = db.get<{ id: number; password_hash: string }>(
-    "SELECT id, password_hash FROM users WHERE lower(username) = ?",
+  const user = await db.get<{ id: number; password_hash: string }>(
+    "SELECT id, password_hash FROM users WHERE lower(username) = $1",
     username,
   );
 

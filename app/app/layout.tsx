@@ -10,7 +10,7 @@ export default async function AppLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const problem = databaseProblem();
+  const problem = await databaseProblem();
   if (problem) return <RuntimeErrorNotice problem={problem} />;
 
   try {

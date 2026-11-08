@@ -27,9 +27,9 @@ export async function saveExpense(
     : Date.now();
 
   if (id > 0) {
-    db.run(
-      `UPDATE expenses SET title = ?, amount = ?, category = ?, note = ?, spent_at = ?
-       WHERE id = ?`,
+    await db.run(
+      `UPDATE expenses SET title = $1, amount = $2, category = $3, note = $4, spent_at = $5
+       WHERE id = $6`,
       title,
       amount,
       category,
@@ -38,9 +38,9 @@ export async function saveExpense(
       id,
     );
   } else {
-    db.run(
+    await db.run(
       `INSERT INTO expenses (title, amount, category, note, user_name, spent_at, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
       title,
       amount,
       category,
@@ -59,7 +59,7 @@ export async function saveExpense(
 
 export async function deleteExpense(id: number) {
   await requireUser();
-  db.run("DELETE FROM expenses WHERE id = ?", Number(id));
+  await db.run("DELETE FROM expenses WHERE id = $1", Number(id));
   revalidatePath("/app/expenses");
   revalidatePath("/app");
   revalidatePath("/app/reports");

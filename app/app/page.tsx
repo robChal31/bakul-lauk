@@ -39,16 +39,16 @@ export const instant = false;
 export default async function DashboardPage() {
 
   const user = await requireUser();
-  const settings = getSettings();
+  const settings = await getSettings();
   const threshold = Number(settings.low_stock_threshold) || 10;
   const today = jakartaDay();
 
-  const summary = dailySummary(today);
-  const yesterday = dailySummary(shiftDay(today, -1));
-  const series = salesSeries(7, today);
-  const recent = recentSales(5);
-  const lowStock = lowStockProducts(threshold, 4);
-  const expensesToday = listExpenses(dayStart(today), dayEnd(today)).reduce(
+  const summary = await dailySummary(today);
+  const yesterday = await dailySummary(shiftDay(today, -1));
+  const series = await salesSeries(7, today);
+  const recent = await recentSales(5);
+  const lowStock = await lowStockProducts(threshold, 4);
+  const expensesToday = (await listExpenses(dayStart(today), dayEnd(today))).reduce(
     (sum, row) => sum + row.amount,
     0,
   );

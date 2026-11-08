@@ -1,6 +1,12 @@
-import type { DatabaseSync } from "node:sqlite";
+if (process.env.KASIRKU_CLI !== "1") {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  require("server-only");
+}
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { DEMO_USERS } from "./demo/accounts";
+import { db } from "./db";
 import { jakartaDay, shiftDay } from "./format";
-import { hashPassword } from "./password";
 
 // PRNG deterministik agar data demo selalu sama.
 function mulberry32(seed: number) {
@@ -62,51 +68,58 @@ const EXPENSES: Array<{ title: string; amount: number; category: string }> = [
 
 const PAYMENTS = ["cash", "cash", "cash", "cash", "qris", "qris", "transfer"];
 
-export function seedDatabase(conn: DatabaseSync) {
+/** Baca supabase/schema.sql (skema idempoten) untuk bootstrap otomatis. */
+export function schemaSql(): string {
+  const file = path.join(process.cwd(), "supabase", "schema.sql");
+  return readFileSync(file, "utf8");
+}
+
+/** Jumlah user (murah, dipakai untuk cek "database kosong"). */
+export async function isDatabaseEmpty(): Promise<boolean> {
+  const row = await db.get<{ total: number }>("SELECT COUNT(*)::int AS total FROM users");
+  return Number(row?.total ?? 0) === 0;
+}
+
+/**
+ * Isi data demo. Pemanggil wajib memastikan database kosong
+ * (lihat ensureSchema di lib/bootstrap.ts).
+ */
+export async function seedDatabase() {
   const now = Date.now();
   const today = jakartaDay(now);
   const rand = mulberry32(20260101);
 
-  const insertUser = conn.prepare(
-    "INSERT INTO users (name, username, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?)",
-  );
-  insertUser.run("Pemilik Warung", "admin", hashPassword("admin123"), "owner", now);
-  insertUser.run("Kasir Demo", "kasir", hashPassword("kasir123"), "kasir", now);
-
-  const insertSettings = conn.prepare(
-    "INSERT INTO settings (key, value) VALUES (?, ?)",
-  );
-  insertSettings.run("store_name", "Bakul Lauk");
-  insertSettings.run("store_address", "Jl. Melati No. 12, Jakarta Selatan");
-  insertSettings.run("store_phone", "0812-3456-7890");
-  insertSettings.run("receipt_note", "Terima kasih sudah belanja 🙏");
-  insertSettings.run("low_stock_threshold", "10");
-
-  const insertExpenseCategory = conn.prepare(
-    "INSERT INTO expense_categories (name) VALUES (?)",
-  );
-  for (const name of [
-    "bahan baku",
-    "operasional",
-    "perlengkapan",
-    "perawatan",
-    "sewa",
-    "lainnya",
-  ]) {
-    insertExpenseCategory.run(name);
+  for (const user of DEMO_USERS) {
+    await db.run(
+      "INSERT INTO users (name, username, password_hash, role, created_at) VALUES ($1, $2, $3, $4, $5)",
+      user.name,
+      user.username,
+      user.password_hash,
+      user.role,
+      now,
+    );
   }
 
-  const insertCategory = conn.prepare("INSERT INTO categories (name) VALUES (?)");
+  const settings: Array<[string, string]> = [
+    ["store_name", "Bakul Lauk"],
+    ["store_address", "Jl. Melati No. 12, Jakarta Selatan"],
+    ["store_phone", "0812-3456-7890"],
+    ["receipt_note", "Terima kasih sudah belanja 🙏"],
+    ["low_stock_threshold", "10"],
+  ];
+  for (const [key, value] of settings) {
+    await db.run("INSERT INTO settings (key, value) VALUES ($1, $2)", key, value);
+  }
+
   const categoryIds = new Map<string, number>();
   for (const name of CATEGORIES) {
-    const result = insertCategory.run(name);
-    categoryIds.set(name, Number(result.lastInsertRowid));
+    const row = await db.get<{ id: number }>(
+      "INSERT INTO categories (name) VALUES ($1) RETURNING id",
+      name,
+    );
+    categoryIds.set(name, Number(row?.id));
   }
 
-  const insertProduct = conn.prepare(
-    `INSERT INTO products (name, sku, category_id, price, cost, stock, is_active, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, 1, ?)`,
-  );
   const productRows: Array<{
     id: number;
     name: string;
@@ -115,7 +128,9 @@ export function seedDatabase(conn: DatabaseSync) {
     weight: number;
   }> = [];
   for (const p of PRODUCTS) {
-    const result = insertProduct.run(
+    const row = await db.get<{ id: number }>(
+      `INSERT INTO products (name, sku, category_id, price, cost, stock, is_active, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, 1, $7) RETURNING id`,
       p.name,
       p.sku,
       categoryIds.get(p.category) ?? null,
@@ -125,138 +140,117 @@ export function seedDatabase(conn: DatabaseSync) {
       now,
     );
     productRows.push({
-      id: Number(result.lastInsertRowid),
+      id: Number(row?.id),
       name: p.name,
       price: p.price,
       cost: p.cost,
       weight: p.weight,
     });
   }
-  const pool = productRows.flatMap((p) =>
-    Array.from({ length: p.weight }, () => p),
-  );
-
-  const insertSale = conn.prepare(
-    `INSERT INTO sales (code, user_id, cashier_name, customer_name, subtotal, discount, total,
-       payment_method, amount_paid, change_due, note, voided, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, ?)`,
-  );
-  const insertItem = conn.prepare(
-    `INSERT INTO sale_items (sale_id, product_id, product_name, price, cost, qty, line_total)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
-  );
+  const pool = productRows.flatMap((p) => Array.from({ length: p.weight }, () => p));
 
   let sequence = 1;
   const DAYS = 14;
+  const nowJakartaHour = Number(
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Asia/Jakarta",
+      hour: "2-digit",
+      hour12: false,
+    }).format(new Date(now)),
+  );
 
-  conn.exec("BEGIN");
-  try {
-    for (let dayOffset = DAYS - 1; dayOffset >= 0; dayOffset--) {
-      const day = shiftDay(today, -dayOffset);
-      // Hari ini: transaksi hanya sampai jam sekarang (supaya terasa wajar).
-      const isToday = dayOffset === 0;
-      const nowJakartaHour = Number(
-        new Intl.DateTimeFormat("en-GB", {
-          timeZone: "Asia/Jakarta",
-          hour: "2-digit",
-          hour12: false,
-        }).format(new Date(now)),
-      );
-      const weekend = [0, 6].includes(
-        new Date(`${day}T12:00:00+07:00`).getDay(),
-      );
-      const baseCount = 5 + Math.floor(rand() * 5) + (weekend ? 3 : 0);
-      const count = isToday
-        ? Math.max(2, Math.round(baseCount * Math.min(1, (nowJakartaHour - 6) / 14)))
-        : baseCount;
+  for (let dayOffset = DAYS - 1; dayOffset >= 0; dayOffset--) {
+    const day = shiftDay(today, -dayOffset);
+    const isToday = dayOffset === 0;
+    const weekend = [0, 6].includes(new Date(`${day}T12:00:00+07:00`).getDay());
+    const baseCount = 5 + Math.floor(rand() * 5) + (weekend ? 3 : 0);
+    const count = isToday
+      ? Math.max(2, Math.round(baseCount * Math.min(1, (nowJakartaHour - 6) / 14)))
+      : baseCount;
 
-      const stamps: number[] = [];
-      // Untuk hari ini, sebar transaksi hanya sampai jam sekarang.
-      const lastHour = isToday ? Math.max(8, nowJakartaHour) : 20;
-      for (let i = 0; i < count; i++) {
-        const hour = 7 + Math.floor(rand() * Math.max(1, lastHour - 7));
-        const minute = Math.floor(rand() * 60);
-        const stamp = new Date(
-          `${day}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00+07:00`,
-        ).getTime();
-        if (stamp <= now) stamps.push(stamp);
+    const stamps: number[] = [];
+    const lastHour = isToday ? Math.max(8, nowJakartaHour) : 20;
+    for (let i = 0; i < count; i++) {
+      const hour = 7 + Math.floor(rand() * Math.max(1, lastHour - 7));
+      const minute = Math.floor(rand() * 60);
+      const stamp = new Date(
+        `${day}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00+07:00`,
+      ).getTime();
+      if (stamp <= now) stamps.push(stamp);
+    }
+    stamps.sort((a, b) => a - b);
+
+    for (const stamp of stamps) {
+      const itemCount = 1 + Math.floor(rand() * 2);
+      const chosen = new Map<number, { product: (typeof pool)[number]; qty: number }>();
+      for (let i = 0; i < itemCount; i++) {
+        const product = pool[Math.floor(rand() * pool.length)];
+        const qty = 1 + Math.floor(rand() * 2);
+        const existing = chosen.get(product.id);
+        if (existing) existing.qty += qty;
+        else chosen.set(product.id, { product, qty });
       }
-      stamps.sort((a, b) => a - b);
 
-      for (const stamp of stamps) {
-        const itemCount = 1 + Math.floor(rand() * 2);
-        const chosen = new Map<number, { product: (typeof pool)[number]; qty: number }>();
-        for (let i = 0; i < itemCount; i++) {
-          const product = pool[Math.floor(rand() * pool.length)];
-          const qty = 1 + Math.floor(rand() * 2);
-          const existing = chosen.get(product.id);
-          if (existing) existing.qty += qty;
-          else chosen.set(product.id, { product, qty });
-        }
+      let subtotal = 0;
+      for (const { product, qty } of chosen.values()) subtotal += product.price * qty;
 
-        let subtotal = 0;
-        for (const { product, qty } of chosen.values()) {
-          subtotal += product.price * qty;
-        }
-        const discount = rand() > 0.88 ? Math.round((subtotal * 0.05) / 500) * 500 : 0;
-        const total = subtotal - discount;
-        const method = PAYMENTS[Math.floor(rand() * PAYMENTS.length)];
-        const paid =
-          method === "cash" ? Math.ceil(total / 5000) * 5000 : total;
-        const cashier = rand() > 0.45 ? "Pemilik Warung" : "Kasir Demo";
-        const customer = CUSTOMERS[Math.floor(rand() * CUSTOMERS.length)];
-        const codeDate = day.replaceAll("-", "").slice(2);
-        const code = `TRX-${codeDate}-${String(sequence++).padStart(4, "0")}`;
+      const discount = rand() > 0.88 ? Math.round((subtotal * 0.05) / 500) * 500 : 0;
+      const total = subtotal - discount;
+      const method = PAYMENTS[Math.floor(rand() * PAYMENTS.length)];
+      const paid = method === "cash" ? Math.ceil(total / 5000) * 5000 : total;
+      const cashier = rand() > 0.45 ? DEMO_USERS[0].name : DEMO_USERS[1].name;
+      const customer = CUSTOMERS[Math.floor(rand() * CUSTOMERS.length)];
+      const codeDate = day.replaceAll("-", "").slice(2);
+      const code = `TRX-${codeDate}-${String(sequence++).padStart(4, "0")}`;
 
-        const sale = insertSale.run(
-          code,
-          1,
-          cashier,
-          customer === "Umum" ? null : customer,
-          subtotal,
-          discount,
-          total,
-          method,
-          paid,
-          paid - total,
-          stamp,
+      const sale = await db.get<{ id: number }>(
+        `INSERT INTO sales (code, user_id, cashier_name, customer_name, subtotal, discount,
+           total, payment_method, amount_paid, change_due, note, voided, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NULL, 0, $11)
+         RETURNING id`,
+        code,
+        1,
+        cashier,
+        customer === "Umum" ? null : customer,
+        subtotal,
+        discount,
+        total,
+        method,
+        paid,
+        paid - total,
+        stamp,
+      );
+      const saleId = Number(sale?.id);
+
+      for (const { product, qty } of chosen.values()) {
+        await db.run(
+          `INSERT INTO sale_items (sale_id, product_id, product_name, price, cost, qty, line_total)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          saleId,
+          product.id,
+          product.name,
+          product.price,
+          product.cost,
+          qty,
+          product.price * qty,
         );
-        const saleId = Number(sale.lastInsertRowid);
-        for (const { product, qty } of chosen.values()) {
-          insertItem.run(
-            saleId,
-            product.id,
-            product.name,
-            product.price,
-            product.cost,
-            qty,
-            product.price * qty,
-          );
-        }
       }
     }
+  }
 
-    const insertExpense = conn.prepare(
+  for (const [index, expense] of EXPENSES.entries()) {
+    const day = shiftDay(today, -(index % 14));
+    const stamp = new Date(`${day}T10:30:00+07:00`).getTime();
+    await db.run(
       `INSERT INTO expenses (title, amount, category, note, user_name, payment_source, spent_at, created_at)
-       VALUES (?, ?, ?, NULL, ?, ?, ?, ?)`,
+       VALUES ($1, $2, $3, NULL, $4, $5, $6, $7)`,
+      expense.title,
+      expense.amount,
+      expense.category,
+      DEMO_USERS[0].name,
+      index % 3 === 0 ? "transfer" : "kas",
+      stamp,
+      stamp,
     );
-    EXPENSES.forEach((expense, index) => {
-      const day = shiftDay(today, -(index % 14));
-      const stamp = new Date(`${day}T10:30:00+07:00`).getTime();
-      insertExpense.run(
-        expense.title,
-        expense.amount,
-        expense.category,
-        "Pemilik Warung",
-        index % 3 === 0 ? "transfer" : "kas",
-        stamp,
-        stamp,
-      );
-    });
-
-    conn.exec("COMMIT");
-  } catch (error) {
-    conn.exec("ROLLBACK");
-    throw error;
   }
 }

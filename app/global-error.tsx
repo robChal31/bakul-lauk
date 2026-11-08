@@ -22,25 +22,26 @@ export default function GlobalError({
 
   let title = "Aplikasi gagal dimuat";
   let detail =
-    "Terjadi kesalahan di server. Coba muat ulang halaman; data di SQLite tetap aman.";
+    "Terjadi kesalahan di server. Coba muat ulang halaman; data di database tetap aman.";
   let fix =
     "Kalau error berulang, buka /api/health untuk melihat detail lingkungan.";
 
-  if (message.includes("node:sqlite") || message.includes("ERR_UNKNOWN_BUILTIN_MODULE")) {
-    title = "Versi Node.js terlalu lama";
+  if (message.includes("DATABASE_URL")) {
+    title = "Database belum dikonfigurasi";
     detail =
-      "Aplikasi memakai modul bawaan node:sqlite yang butuh Node.js 22.13 atau lebih baru.";
-    fix = "Set env NODE_VERSION=22 di Netlify, lalu deploy ulang tanpa cache.";
-  } else if (
-    message.includes("unable to open database file") ||
-    message.includes("EACCES") ||
-    message.includes("read-only")
-  ) {
-    title = "Database tidak bisa ditulis";
-    detail =
-      "Filesystem function di serverless bersifat read-only sehingga file SQLite tidak bisa dibuat.";
+      "Aplikasi butuh connection string Postgres/Supabase di env DATABASE_URL.";
     fix =
-      "Set env DATABASE_PATH=/tmp/kasirku/kasirku.db (atau volume persistent), lalu deploy ulang.";
+      "Set env DATABASE_URL (connection string pooler Supabase) di Netlify, lalu redeploy.";
+  } else if (
+    message.includes("password authentication failed") ||
+    message.includes("ECONNREFUSED") ||
+    message.includes("ENOTFOUND") ||
+    message.includes("ETIMEDOUT")
+  ) {
+    title = "Tidak bisa terhubung ke database";
+    detail = "Koneksi ke Postgres/Supabase gagal dari server aplikasi.";
+    fix =
+      "Periksa DATABASE_URL (pakai host pooler port 6543) dan pastikan project Supabase aktif.";
   }
 
   return (

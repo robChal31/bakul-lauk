@@ -17,11 +17,11 @@ export default async function SaleDetailPage({
 }) {
   const user = await requireUser();
   const { id } = await params;
-  const data = getSale(Number(id));
+  const data = await getSale(Number(id));
   if (!data) notFound();
 
   const { sale, items } = data;
-  const settings = getSettings();
+  const settings = await getSettings();
 
   return (
     <main className="pb-28">

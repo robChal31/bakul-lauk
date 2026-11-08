@@ -5,7 +5,6 @@ import { IconLogout, IconStore, IconUser } from "@/components/icons";
 import { logoutAction } from "@/app/actions/auth";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { DATABASE_PATH } from "@/lib/db";
 import { formatDate } from "@/lib/format";
 import { getSettings } from "@/lib/settings";
 
@@ -13,18 +12,28 @@ export const instant = false;
 
 export default async function SettingsPage() {
   const user = await requireUser();
-  const settings = getSettings();
-  const stats = db.get<{ sales: number; products: number; users: number }>(
+  const settings = await getSettings();
+  const stats = await db.get<{ sales: number; products: number; users: number }>(
     `SELECT (SELECT COUNT(*) FROM sales) AS sales,
             (SELECT COUNT(*) FROM products) AS products,
             (SELECT COUNT(*) FROM users) AS users`,
   );
-  const accounts = db.all<{
+  const accounts = await db.all<{
     name: string;
     username: string;
     role: string;
     created_at: number;
   }>("SELECT name, username, role, created_at FROM users ORDER BY id");
+
+  // Tampilkan host database saja — connection string memuat password.
+  const databaseLabel = (() => {
+    try {
+      const url = new URL(process.env.DATABASE_URL ?? "");
+      return `${url.hostname}${url.port ? `:${url.port}` : ""}${url.pathname}`;
+    } catch {
+      return "DATABASE_URL belum di-set";
+    }
+  })();
 
   return (
     <main className="pb-28">
@@ -120,14 +129,14 @@ export default async function SettingsPage() {
               </h2>
             </div>
             <p className="mt-1.5 text-[12.5px] leading-relaxed text-zinc-500">
-              Semua transaksi disimpan di file SQLite di dalam project:
+              Semua transaksi disimpan di database Postgres (Supabase):
             </p>
             <p className="mt-1.5 rounded-lg bg-zinc-900 px-2.5 py-2 font-mono text-[11px] break-all text-emerald-300">
-              {DATABASE_PATH}
+              {databaseLabel}
             </p>
             <p className="mt-1.5 text-[11.5px] text-zinc-400">
-              Backup cukup dengan menyalin file tersebut. Tidak ada layanan
-              eksternal yang dipakai.
+              Backup & restore dilakukan dari dashboard Supabase (Database →
+              Backups). Kredensial koneksi hanya ada di env server.
             </p>
           </Card>
         </div>

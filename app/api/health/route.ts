@@ -1,61 +1,43 @@
 import { connection } from "next/server";
-import { getDb } from "@/lib/db";
-import { DATABASE_IS_EPHEMERAL, DATABASE_LOCATION } from "@/lib/db-path";
-import { detectRuntimeProblem, runtimeInfo } from "@/lib/runtime-check";
+import { db } from "@/lib/db";
+import { databaseProblem, runtimeInfo } from "@/lib/runtime-check";
 
 /**
- * Diagnostik singkat: memastikan koneksi SQLite sehat dan memberi tahu di
- * mana file database berada (penting di lingkungan serverless seperti Netlify).
+ * Diagnostik: memastikan koneksi ke Postgres/Supabase sehat dan memberi tahu
+ * host database yang dipakai (password disamarkan).
  *
  * Buka /api/health setelah deploy.
  */
 export async function GET() {
-  // Paksa dieksekusi saat request, bukan di-prerender waktu build, supaya
-  // informasi path & isi database mencerminkan runtime sebenarnya.
+  // Paksa dieksekusi saat request, bukan di-prerender waktu build.
   await connection();
 
-  const environment = runtimeInfo();
-
   try {
-    const db = getDb();
-    const products = db
-      .prepare("SELECT COUNT(*) AS total FROM products")
-      .get() as { total: number };
-    const sales = db
-      .prepare("SELECT COUNT(*) AS total FROM sales")
-      .get() as { total: number };
+    const products = await db.get<{ total: number }>(
+      "SELECT COUNT(*)::int AS total FROM products",
+    );
+    const sales = await db.get<{ total: number }>(
+      "SELECT COUNT(*)::int AS total FROM sales",
+    );
 
     return Response.json({
       ok: true,
       node: process.version,
-      environment,
-      database: {
-        path: DATABASE_LOCATION.file,
-        source: DATABASE_LOCATION.source,
-        ephemeral: DATABASE_IS_EPHEMERAL,
-      },
+      environment: runtimeInfo(),
       counts: {
-        products: Number(products.total),
-        sales: Number(sales.total),
+        products: Number(products?.total ?? 0),
+        sales: Number(sales?.total ?? 0),
       },
-      warning: DATABASE_IS_EPHEMERAL
-        ? "Data disimpan di penyimpanan sementara: akan kembali ke data demo setelah instance di-restart. Set env DATABASE_PATH ke volume persistent untuk data permanen."
-        : undefined,
     });
   } catch (error) {
-    const problem = detectRuntimeProblem(error);
+    const problem = await databaseProblem();
 
     return Response.json(
       {
         ok: false,
         error: error instanceof Error ? error.message : String(error),
         problem,
-        environment,
-        database: {
-          path: DATABASE_LOCATION.file,
-          source: DATABASE_LOCATION.source,
-          ephemeral: DATABASE_IS_EPHEMERAL,
-        },
+        environment: runtimeInfo(),
       },
       { status: 503 },
     );

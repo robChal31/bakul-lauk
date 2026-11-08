@@ -10,17 +10,24 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "db:seed": "tsx scripts/seed-demo.ts",
-    "db:reset": "tsx scripts/reseed.ts",
-    "reseed": "tsx scripts/reseed.ts",
-    "test:db": "DATABASE_PATH=./.tmp-db-test/safety.db tsx scripts/safety-test.ts"
+    "db:setup": "KASIRKU_CLI=1 tsx scripts/db-setup.ts",
+    "db:seed": "KASIRKU_CLI=1 tsx scripts/seed-demo.ts",
+    "db:reset": "KASIRKU_CLI=1 tsx scripts/reseed.ts",
+    "reseed": "KASIRKU_CLI=1 tsx scripts/reseed.ts",
+    "db:check": "KASIRKU_CLI=1 tsx scripts/open-database.ts",
+    "test:db": "KASIRKU_CLI=1 tsx scripts/test-db.ts",
+    "test:pglite": "KASIRKU_CLI=1 tsx scripts/pglite-server.ts",
+    "db:setup:seed": "KASIRKU_CLI=1 tsx scripts/db-setup.ts --seed"
   },
   "dependencies": {
     "next": "16.4.5",
+    "postgres": "4.1.0",
     "react": "19.3.0",
     "react-dom": "19.3.0"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.15",
+    "@electric-sql/pglite-socket": "^0.2.18",
     "@tailwindcss/turbopack": "^4",
     "@types/node": "^22.20.5",
     "@types/react": "^19",
