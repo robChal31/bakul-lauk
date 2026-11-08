@@ -45,3 +45,6 @@ next-env.d.ts
 
 # database sementara untuk `npm run test:db`
 /.tmp-db-test/
+
+# netlify
+.netlify/
