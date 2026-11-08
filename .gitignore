@@ -42,3 +42,6 @@ next-env.d.ts
 
 # sqlite: database dibuat otomatis saat pertama kali dijalankan
 /data/
+
+# database sementara untuk `npm run test:db`
+/.tmp-db-test/

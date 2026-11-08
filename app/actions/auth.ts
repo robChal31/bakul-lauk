@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { createSession, destroySession } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { verifyPassword } from "@/lib/seed";
+import { verifyPassword } from "@/lib/password";
 
 export type LoginState = { error?: string };
 
